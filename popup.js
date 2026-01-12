@@ -25,14 +25,11 @@ extractBtn.addEventListener('click', async () => {
         // Get active tab
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-        // Execute content script
-        const results = await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: extractDataFromPage
-        });
+        // Send message to content script
+        const response = await chrome.tabs.sendMessage(tab.id, { action: 'extractData' });
 
         // Process results
-        extractedData = results[0].result;
+        extractedData = response;
         displayResults();
     } catch (error) {
         console.error('Extraction error:', error);
@@ -184,66 +181,4 @@ function downloadFile(blob, filename) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-}
-
-// Content script function (injected into page)
-function extractDataFromPage() {
-    const data = {
-        emails: [],
-        phones: [],
-        socialLinks: []
-    };
-
-    // Get page text content
-    const pageText = document.body.innerText;
-
-    // Email regex pattern
-    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-    const emails = pageText.match(emailRegex) || [];
-    data.emails = [...new Set(emails)]; // Remove duplicates
-
-    // Extract phone numbers from tel: links only
-    const telLinks = document.querySelectorAll('a[href^="tel:"]');
-    const phones = new Set();
-    telLinks.forEach(link => {
-        // Get the phone number from href, removing "tel:" prefix
-        const phone = link.href.replace('tel:', '').trim();
-        if (phone) {
-            phones.add(phone);
-        }
-    });
-    data.phones = [...phones];
-
-    // Social media platforms to detect
-    const socialPlatforms = {
-        facebook: /facebook\.com/i,
-        twitter: /(?:twitter\.com|x\.com)/i,
-        linkedin: /linkedin\.com/i,
-        instagram: /instagram\.com/i,
-        youtube: /youtube\.com/i,
-        github: /github\.com/i,
-        tiktok: /tiktok\.com/i
-    };
-
-    // Extract social links from href attributes (use full URL)
-    const allLinks = document.querySelectorAll('a[href]');
-    const socialLinks = new Map();
-
-    allLinks.forEach(link => {
-        const href = link.href;
-
-        for (const [platform, pattern] of Object.entries(socialPlatforms)) {
-            if (pattern.test(href)) {
-                // Use the full href URL (preserves query parameters)
-                if (!socialLinks.has(href)) {
-                    socialLinks.set(href, { platform, url: href });
-                }
-                break; // Only match first platform
-            }
-        }
-    });
-
-    data.socialLinks = [...socialLinks.values()];
-
-    return data;
 }
